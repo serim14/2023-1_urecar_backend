@@ -125,11 +125,11 @@ class DjangoSession(models.Model):
 class ParkingLot(models.Model):
     plotid = models.IntegerField(primary_key=True)
     plotname = models.CharField(max_length=45, blank=True, null=True)
-    location = models.CharField(max_length=45)
+    location = models.CharField(max_length=45, blank=True, null=True)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     fee = models.IntegerField(blank=True, null=True)
-    total_space = models.IntegerField(blank=True, null=True)
+    totalspace = models.IntegerField(blank=True, null=True)
     available_space = models.IntegerField(blank=True, null=True)
 
     class Meta:
@@ -138,15 +138,27 @@ class ParkingLot(models.Model):
 
 
 class ParkingSlot(models.Model):
-    plotid = models.OneToOneField(ParkingLot, models.DO_NOTHING, db_column='plotid', primary_key=True)
-    slotid = models.CharField(max_length=45)
-    ptime = models.DateTimeField(blank=True, null=True)
+    slotid = models.CharField(primary_key=True, max_length=45)
+    plotid = models.ForeignKey(ParkingLot, models.DO_NOTHING, db_column='plotid')
     available = models.CharField(max_length=45)
+    ptime = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         managed = False
         db_table = 'parking_slot'
-        unique_together = (('plotid', 'slotid'),)
+
+
+class Reservation(models.Model):
+    resnum = models.IntegerField(primary_key=True)
+    slotid = models.ForeignKey(ParkingSlot, models.DO_NOTHING, db_column='slotid')
+    userid = models.ForeignKey('User', models.DO_NOTHING, db_column='userid')
+    intime = models.DateTimeField(blank=True, null=True)
+    outtime = models.DateTimeField(blank=True, null=True)
+    usagetime = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'reservation'
 
 
 class TutorialPost(models.Model):
@@ -161,9 +173,8 @@ class TutorialPost(models.Model):
 
 class User(models.Model):
     userid = models.CharField(primary_key=True, max_length=45)
-    password = models.CharField(max_length=45)
     carnum = models.CharField(max_length=45, blank=True, null=True)
-    username = models.CharField(max_length=45)
+    username = models.CharField(max_length=45, blank=True, null=True)
     address = models.CharField(max_length=45, blank=True, null=True)
     phone = models.CharField(max_length=45, blank=True, null=True)
 

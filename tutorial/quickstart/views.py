@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import generics
 from .serializers import ParkingLotSerializer
-from .models import ParkingLot, ParkingSlot, User
+from .models import ParkingLot, ParkingSlot, User, Reservation
 from .serializers import ParkingSlotSerializer
 
 from django.http import HttpResponse, JsonResponse
@@ -29,7 +29,7 @@ class ParkingLotList(APIView):
         response_data = {
             'plotname': parking_lot.plotname,
             'location': parking_lot.location,
-            'total_space': parking_lot.total_space,
+            'total_space': parking_lot.totalspace,
         }
         return Response(response_data)
 
@@ -42,17 +42,70 @@ def get_marker(self):
     return Response(data, status=status.HTTP_200_OK)
 
 
-
+###### 예약 API 구현
     
 # availble 속성 인공지능 모델에 따라 업데이트
-class ParkingSlotList(generics.ListAPIView):
-    serializer_class = ParkingSlotSerializer
 
+# 0. 주차장의 parking_slot 테이블의 availble 속성 딥러닝으로 계속 업데이트
+
+# 1. 각각 주차장의 slot 정보 가져오기
+# (안드) plotid 를 줌
+
+class Get_parkingslot_info(generics.ListAPIView):
+    serializer_class = ParkingSlotSerializer
+# (백엔드) parking_slot 테이블에서 plotid 일치하는 정보 조회해 돌려줌
     def get_queryset(self):
-        plotid = self.kwargs['plotid']
-        queryset = ParkingSlot.objects.filter(plotid=plotid)
+        plotid = self.request.data.get('ploid')    # 안드가 준 plotid 받아옴
+        queryset = ParkingSlot.objects.filter(plotid=plotid)    # parking_slot 테이블에서 plotid로 특정 주차장의 slot정보 모두 조회해 가져옴
         return queryset
-    
+
+    def post(self, request, *args, **kwargs):
+        if not request.data.get('plotid'):  # 안드에서 plotid를 주지 않았을 경우
+            return Response({'error': 'plotid is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return self.list(request, *args, **kwargs)
+
+# 2. 예약 정보 받아서 예약 db 업데이트
+@api_view(['POST'])
+def update_reservation(request):
+    plotid = request.data.get('plotid')
+    slotid = request.data.get('slotid')
+    userid = request.data.get('userid')
+    usagetime = request.data.get('usagetime')
+
+    # 예약번호 생성
+    last_reservation = Reservation.objects.last()
+    if last_reservation:
+        resnum = last_reservation.resnum + 1
+    else:
+        resnum = 1
+
+    # 예약 정보 생성
+    reservation = Reservation(
+        resnum=resnum,
+        slotid_id=slotid,
+        userid_id=userid,
+        usagetime=usagetime,
+        intime=None,
+        outtime=None
+    )
+    reservation.save()
+
+    # ParkingLot 정보 가져오기
+    try:
+        parking_lot = ParkingLot.objects.get(plotid=plotid)
+    except ParkingLot.DoesNotExist:
+        return Response({'error': 'Invalid plotid'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 반환할 값
+    response_data = {
+        'parking_lot_name': parking_lot.plotname,
+        'parking_lot_location': parking_lot.location,
+        'slotid': slotid,
+        'usagetime': usagetime
+    }
+
+    return Response(response_data, status=status.HTTP_200_OK)
 
 # 로그인 기능 구현
 def login(request):
@@ -65,3 +118,5 @@ def login(request):
             return HttpResponse(status=200)
         else:
             return HttpResponse(status=400)
+        
+

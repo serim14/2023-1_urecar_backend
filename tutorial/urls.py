@@ -26,5 +26,10 @@ urlpatterns = [
     path('plot/', views.ParkingLotList.get_plot_info),
     path('plot_list/', views.ParkingLotList.get_plot_list),
     path('marker/', views.get_marker),
-    path('api-auth/', include('rest_framework.urls', namespace='rest_framework'))
+    # /reservation/ 엔드포인트로 POST 요청이 들어오면 Reservation 클래스의 post 메서드 실행
+    # GET 요청이 들어오면 Reservation 클래스의 get_queryset 메서드가 실행
+    # 예약전 해당 주차장의 slot 보여주는 api
+    path('get_slot_info/', views.Get_parkingslot_info.as_view(), name='get_slot_info'),
+    path('update_reservation/', views.update_reservation, name='update_reservation'),
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ]
