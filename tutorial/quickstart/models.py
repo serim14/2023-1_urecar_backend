@@ -150,8 +150,10 @@ class ParkingSlot(models.Model):
 
 class Reservation(models.Model):
     resnum = models.IntegerField(primary_key=True)
+    plotid = models.IntegerField()
     slotid = models.ForeignKey(ParkingSlot, models.DO_NOTHING, db_column='slotid')
     userid = models.ForeignKey('User', models.DO_NOTHING, db_column='userid')
+    carnum = models.CharField(max_length=45)
     intime = models.DateTimeField(blank=True, null=True)
     outtime = models.DateTimeField(blank=True, null=True)
     usagetime = models.IntegerField(blank=True, null=True)
@@ -177,6 +179,7 @@ class User(models.Model):
     username = models.CharField(max_length=45, blank=True, null=True)
     address = models.CharField(max_length=45, blank=True, null=True)
     phone = models.CharField(max_length=45, blank=True, null=True)
+    password = models.CharField(max_length=45, blank=True, null=True)
 
     class Meta:
         managed = False

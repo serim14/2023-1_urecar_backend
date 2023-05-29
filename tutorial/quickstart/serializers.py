@@ -1,6 +1,6 @@
 #from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import ParkingLot, ParkingSlot, User
+from .models import ParkingLot, ParkingSlot, User, Reservation
 
 class ParkingLotSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -18,4 +18,8 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['userid', 'password', 'carnum', 'username', 'address', 'phone']
 
-
+# 예약 정보
+class ReservationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reservation
+        fields = ['resnum', 'plotid', 'slotid', 'userid', 'carnum', 'intime', 'outtime', 'usagetime']

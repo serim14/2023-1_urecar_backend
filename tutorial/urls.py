@@ -31,5 +31,6 @@ urlpatterns = [
     # 예약전 해당 주차장의 slot 보여주는 api
     path('get_slot_info/', views.Get_parkingslot_info.as_view(), name='get_slot_info'),
     path('update_reservation/', views.update_reservation, name='update_reservation'),
+    path('mypage/',views.get_mypage),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ]
