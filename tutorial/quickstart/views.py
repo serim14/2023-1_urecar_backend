@@ -48,6 +48,81 @@ def get_marker(self):
 
 # 0. 주차장의 parking_slot 테이블의 availble 속성 딥러닝으로 계속 업데이트
 
+
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import ParkingSlot, ParkingLot
+from .detectWebcam import init_roboflow, makePath, webCamStart
+#import clova as cv
+import os
+import threading
+# Roboflow 모델을 가져와서 객체 인식을 수행하는 함수
+def perform_object_detection():
+    # 로직을 추가하여 객체 인식을 수행하는 코드 작성
+    # 인식 결과를 반환 (occupied 또는 empty)
+    occupied_path = "./images/occupied_boundingBox"
+    empty_path = "./images/empty_boundingBox"
+    api_key="Ndgqrpfsb4lW0aJHDg8q"
+    project = "pl-sr"
+    version = 1
+
+    model = init_roboflow(api_key, project, version)
+    makePath(occupied_path, empty_path)
+    slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="공영주차장")
+    return slot_detection_result
+
+    
+
+
+
+# APIView를 상속받아서 실시간 주차장 슬롯 상태를 업데이트하는 API 구현
+class ParkingSlotUpdateAPIView(APIView):
+    def post(self, request):
+        # 카메라에서 촬영한 이미지를 받음
+        #image = request.data.get('image')
+
+        # 객체 인식 수행
+        # 딕셔너리 형태
+        slot_detection_result = perform_object_detection()
+
+
+         # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
+
+        for slotid in slot_detection_result.keys():
+
+
+            # plotid를 안드에서 받아온다면,,,
+            # slotid = f"{plotid}_A{slotid+1}"
+            real_slotid = f"1_A{slotid+1}"
+
+            try:
+                parking_slot = ParkingSlot.objects.get(slotid=real_slotid)
+            except ParkingSlot.DoesNotExist:
+                return Response({'error': '슬랏이 존재하지 않습니다. Invalid slotid'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if slot_detection_result[slotid] == "occupied":
+                parking_slot.available = 'n'
+            elif slot_detection_result[slotid] == "empty":
+                parking_slot.available = 'y'
+            
+            parking_slot.save()
+
+        # ParkingLot 테이블 업데이트
+        parking_lots = ParkingLot.objects.all()
+        for parking_lot in parking_lots:
+            # 해당 주차장의 슬롯 개수를 세어서 totalspace 업데이트
+            total_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid).count()
+            available_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid, available='y').count()
+            parking_lot.totalspace = total_slots
+            parking_lot.available_space = available_slots
+            parking_lot.save()
+
+        return Response(status=200)
+
+
+
+
 # 1. 각각 주차장의 slot 정보 가져오기
 # (안드) plotid 를 줌
 

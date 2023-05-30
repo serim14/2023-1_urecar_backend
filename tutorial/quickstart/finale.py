@@ -17,7 +17,9 @@ save_image_name = "OCRresult"
 
 model = dt.init_roboflow(api_key, project, version)
 dt.makePath(occupied_path, empty_path)
-dt.webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="공영주차장")
+slot_detect = dt.webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="공영주차장")
+print("finale 파일에서 출력함.", slot_detect)
+
 for f in os.listdir(occupied_path): # occupied 됐으면 번호판 인식
     print(f)
     f = occupied_path  + "/" + f

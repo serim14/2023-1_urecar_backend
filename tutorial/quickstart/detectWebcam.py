@@ -2,7 +2,7 @@ import cv2
 from roboflow import Roboflow
 import time
 import os
-import clova as cv
+#import clova as cv
 import copy
 
 # roboflow 모델 불러오기
@@ -115,6 +115,12 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
                 slot_detect_result[i] = "occupied"
             
             print(slot_detect_result)
+            ######
+            #return slot_detect_result
+
+        # 인식한 바운딩 박스 딕셔너리 반환하도록 구현
+        return slot_detect_result
+
 
         if (ret):
             cv2.imshow('frame_color', frame)  # 컬러 화면 출력
