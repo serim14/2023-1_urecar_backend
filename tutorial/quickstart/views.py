@@ -1,19 +1,15 @@
 from django.shortcuts import render
-from rest_framework import generics
-from .serializers import ParkingLotSerializer
 from .models import ParkingLot, ParkingSlot, User, Reservation
-from .serializers import ParkingSlotSerializer
-
-from django.http import HttpResponse, JsonResponse
-from rest_framework.parsers import JSONParser
 
 from rest_framework.decorators import api_view
-
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
 
+###### 원래 구분했지만 이젠 안쓰는 api
+# get_marker에 통합함
+# 1. 각각 주차장의 slot 정보 가져오기
+# (안드) plotid 를 줌
 """
 # 주차장의 (주차id, 위도, 경도) 반환 api
 class ParkingLotList(APIView):
@@ -35,11 +31,8 @@ class ParkingLotList(APIView):
         }
         return Response(response_data)
 """
-
-# 마커정보, 주차장 정보 등 반환
-
-
-
+###### 안드로이드 앱 시작시 호출하는 api
+# 마커 정보 + 주차장 정보 등 필요한 모든 정보 반환
 @api_view(['GET'])
 def get_marker(self):
     Parking_Lot = ParkingLot.objects.all()
@@ -50,173 +43,96 @@ def get_marker(self):
     return Response(data, status=status.HTTP_200_OK)  
 
 ###### 예약 API 구현
-    
 # availble 속성 인공지능 모델에 따라 업데이트
-
 # 0. 주차장의 parking_slot 테이블의 availble 속성 딥러닝으로 계속 업데이트
 
-
-from django.shortcuts import get_object_or_404
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import ParkingSlot, ParkingLot
 from .detectWebcam import init_roboflow, makePath, webCamStart
 #import clova as cv
-import os
-import threading
-# Roboflow 모델을 가져와서 객체 인식을 수행하는 함수
+
+### Roboflow 모델을 가져와서 객체 인식을 수행하는 함수
+# 이 함수의 결과는 {0: "empty"} 와 같은 객체 인식 결과 딕셔너리
+# detectWebcam.py에서 함수 호출해 사용
 def perform_object_detection():
     # 로직을 추가하여 객체 인식을 수행하는 코드 작성
     # 인식 결과를 반환 (occupied 또는 empty)
     occupied_path = "./images/occupied_boundingBox"
     empty_path = "./images/empty_boundingBox"
-    api_key="Ndgqrpfsb4lW0aJHDg8q"
-    project = "pl-sr"
-    version = 1
+    api_key="Ndgqrpfsb4lW0aJHDg8q"  # 로보플로우 api key
+    project = "train-final-qr68m"   #로보플로우 프로젝트 이름
+    version = 3
 
     model = init_roboflow(api_key, project, version)
     makePath(occupied_path, empty_path)
+    # 슬랏 인덱스 별 occupied/empty 정보를 저장한 딕셔너리를 반환
     slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="공영주차장")
     return slot_detection_result
 
     
-
-
-"""
-# APIView를 상속받아서 실시간 주차장 슬롯 상태를 업데이트하는 API 구현
-class ParkingSlotUpdateAPIView(APIView):
-    def post(self, request):
-        # 카메라에서 촬영한 이미지를 받음
-        #image = request.data.get('image')
-
-        # 객체 인식 수행
-        # 딕셔너리 형태
-        slot_detection_result = perform_object_detection()
-
-
-         # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
-
-        for slotid in slot_detection_result.keys():
-            # plotid를 안드에서 받아온다면,,,
-            # slotid = f"{plotid}_A{slotid+1}"
-            real_slotid = f"1_A{slotid+1}"
-
-            try:
-                parking_slot = ParkingSlot.objects.get(slotid=real_slotid)
-            except ParkingSlot.DoesNotExist:
-                return Response({'error': '슬랏이 존재하지 않습니다. Invalid slotid'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            if slot_detection_result[slotid] == "occupied":
-                parking_slot.available = 'n'
-            elif slot_detection_result[slotid] == "empty":
-                parking_slot.available = 'y'
-            
-            parking_slot.save()
-
-        # ParkingLot 테이블 업데이트
-        parking_lots = ParkingLot.objects.all()
-        for parking_lot in parking_lots:
-            # 해당 주차장의 슬롯 개수를 세어서 total_space 업데이트
-            total_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid).count()
-            available_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid, available='y').count()
-            parking_lot.total_space = total_slots
-            parking_lot.available_space = available_slots
-            parking_lot.save()
-
-        return Response(status=200)
-"""
-
+### slot별 주차현황 db에 업데이트하는 함수
+# perform_object_detection() 에서 반환한 slot_detection_result를 통해 parking_slot테이블의 availble 속성 업데이트
+# 업데이트 한 슬랏 현황을 바탕으로 parking_lot 테이블의 available_space 업데이트
 def slot_db_update():
-    # 카메라에서 촬영한 이미지를 받음
-    #image = request.data.get('image')
-
-    # 객체 인식 수행
-    # 딕셔너리 형태
+    # 객체 인식 수행, 딕셔너리 형태
     slot_detection_result = perform_object_detection()
 
-
-        # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
-
-    for slotid in slot_detection_result.keys():
-        # plotid를 안드에서 받아온다면,,,
-        # slotid = f"{plotid}_A{slotid+1}"
-        real_slotid = f"1_A{slotid+1}"
+    # 받아온 딕셔너리를 가공하여 해당 slotid의 occupied/empty에 따라 parking_slot 테이블의 available 속성 수정
+    for slotid in slot_detection_result.keys(): # 슬랏의 인덱스 가져옴( 0, 1, 2, ... 형태)
+        # plotid를 안드에서 받아온다면...
+        # slotid = f"{plotid}_A{slotid+1}"로 수정
+        real_slotid = f"1_A{slotid+1}"  # 인덱스 0부터 시작하니 slotid 포맷 생성
 
         try:
-            parking_slot = ParkingSlot.objects.get(slotid=real_slotid)
+            parking_slot = ParkingSlot.objects.get(slotid=real_slotid)  # 슬랏id가 일치하는 슬랏 튜플 가져옴
         except ParkingSlot.DoesNotExist:
             return Response({'error': '슬랏이 존재하지 않습니다. Invalid slotid'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if slot_detection_result[slotid] == "occupied":
-            parking_slot.available = 'n'
-        elif slot_detection_result[slotid] == "empty":
-            parking_slot.available = 'y'
+        if slot_detection_result[slotid] == "occupied": # 딕셔너리에 인덱스 값을 키값으로 넣었을때 "occupied" 라면(slot_detection_result[0] 형태)
+            parking_slot.available = 'n'    # 슬랏에 차가 존재하니 예약할 수 없음
+        elif slot_detection_result[slotid] == "empty":  # 딕셔너리에 인덱스 값을 키값으로 넣었을때 "empty" 라면
+            parking_slot.available = 'y'    # 슬랏에 차가 없어 예약할 수 있음
         
-        parking_slot.save()
+        parking_slot.save() # 수정한 속성값 DB에 최종 저장
 
     # ParkingLot 테이블 업데이트
-    parking_lots = ParkingLot.objects.all()
-    for parking_lot in parking_lots:
-        # 해당 주차장의 슬롯 개수를 세어서 total_space 업데이트
+    parking_lots = ParkingLot.objects.all() # 주차장 다 가져오기
+    for parking_lot in parking_lots:    # 주차장들 중 특정 주차장 튜플 가져오기
+        # plotid 일치하는 해당 주차장의 슬롯 개수를 세어서 total_space 업데이트
         total_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid).count()
-        available_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid, available='y').count()
-        parking_lot.total_space = total_slots
+        available_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid, available='y').count()  # 예약 가능한 슬랏만 카운트
+        parking_lot.total_space = total_slots   # 속성에 값 저장
         parking_lot.available_space = available_slots
-        parking_lot.save()
+        parking_lot.save()  # DB에 최종 업데이트
 
     return Response(status=200)
 
+import threading
+import time
 
+###### 실시간 슬랏현황 업데이트 api
+# 실시간으로 돌아야하기 때문에 스레드 분기
+class SlotUpdateThread(threading.Thread):
+    def run(self):
+        while True: # 실시간으로 돌리기
+            # 실시간으로 객체인식하고 db업데이트하는 함수 호출
+            slot_db_update()    
+            time.sleep(8)  # 8초마다 API 호출
 
-# 1. 각각 주차장의 slot 정보 가져오기
-# (안드) plotid 를 줌
-"""
-class Get_parkingslot_info(generics.ListAPIView):
-    serializer_class = ParkingSlotSerializer
-# (백엔드) parking_slot 테이블에서 plotid 일치하는 정보 조회해 돌려줌
-    def get_queryset(self):
-        plotid = self.request.data.get('plotid')    # 안드가 준 plotid 받아옴
-        queryset = ParkingSlot.objects.filter(plotid=plotid)    # parking_slot 테이블에서 plotid로 특정 주차장의 slot정보 모두 조회해 가져옴
-        return queryset
-
-    def post(self, request, *args, **kwargs):
-        if not request.data.get('plotid'):  # 안드에서 plotid를 주지 않았을 경우
-            return Response({'error': 'plotid is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        return self.list(request, *args, **kwargs)
-"""
+# 스레드 시작
+slot_update_thread = SlotUpdateThread()
+slot_update_thread.start()
         
-############ 주차장별 slot 정보 가져오기 (slotid, available)
+###### 주차장별 slot 정보 가져오는 api (slotid, available)
 @api_view(['POST'])
 def get_slot_info(request):
-    plotid = request.data.get('plotid')
-    parking_slots = ParkingSlot.objects.filter(plotid=plotid)
-    data = [{"slotid": slot.slotid, "available": slot.available} for slot in parking_slots]
+    plotid = request.data.get('plotid') # 안드에서 받은 plotid 저장
+    parking_slots = ParkingSlot.objects.filter(plotid=plotid)   # parking_slot 테이블에서 해당 plotid와 일치하는 슬랏 정보 모두 가져옴 
+    data = [{"slotid": slot.slotid, "available": slot.available} for slot in parking_slots] # 가져온 튜플 중 slotid와 available 속성 뽑아서 저장
     return Response(data, status=status.HTTP_200_OK)
-
-
-from django.core.exceptions import ObjectDoesNotExist
-
-"""
-@api_view(['POST'])
-def get_slot_info(request):
-    plotid = request.data.get('plotid')
-
-    try:
-        parking_slot = ParkingSlot.objects.get(plotid=plotid)
-    except ParkingSlot.DoesNotExist:
-        return Response({'error': 'Invalid plotid'}, status=status.HTTP_400_BAD_REQUEST)
-    except ParkingSlot.MultipleObjectsReturned:
-        return Response({'error': 'Multiple parking slots found for the given plotid'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # 반환할 값
-    serializer = ParkingSlotSerializer(parking_slot)
-    return Response(serializer.data)
-
-"""
     
 
-# 2. 예약 정보 받아서 예약 db 업데이트
+###### 2. 예약 정보 받아서 예약 db 업데이트하는 api
 @api_view(['POST'])
 def update_reservation(request):
     plotid = request.data.get('plotid')
@@ -243,8 +159,9 @@ def update_reservation(request):
         intime=None,
         outtime=None
     )
-    reservation.save()
+    reservation.save()  # 예약 DB에 저장
 
+    # 예약이 완료됐으니
     # parking_slot 테이블에서 slotid가 일치하는 튜플에서 available 속성 n로 업데이트
     try:
         parking_slot = ParkingSlot.objects.get(slotid=slotid)
@@ -253,7 +170,8 @@ def update_reservation(request):
     except ParkingSlot.DoesNotExist:
         return Response({'error': 'Invalid slotid'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # ParkingLot 정보 가져오기
+    # 사용자에게 예약 완료 팝업 띄워주기 위해
+    # parking_lot 테이블에서 plotname, location 정보 가져오기
     try:
         parking_lot = ParkingLot.objects.get(plotid=plotid)
     except ParkingLot.DoesNotExist:
@@ -266,16 +184,15 @@ def update_reservation(request):
         'slotid': slotid,
         'usagetime': usagetime
     }
-
     return Response(response_data, status=status.HTTP_200_OK)
 
 
-# 예약 후 입차시 번호판 비교 api
+###### 예약 후 입차시 번호판 비교 api
 # 딥러닝 모델을 통해 reservation 테이블에 존재하는 slotid에 차량이 입차했다고 판단되면,
 # 해당 reservation 튜플의 carnum과 실제 입차한 차량의 차량번호가 일치하는지 clova ocr 을 이용해 비교하고,
 # 만약 일치한다면 reservation 테이블의 intime 속성에 입차한 시각(현재 시각)을 업데이트
 # 만약 불일치한다면 경고메세지 출력
-# 여기를 채워줘
+# 아직 구현중...
 
 from django.utils import timezone
 import datetime
@@ -299,28 +216,21 @@ def check_in(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-
-
-# 로그인 기능 구현
+###### 로그인 api
 @api_view(['POST'])
 def login(request):
-    
     userid = request.data.get('userid')
     password = request.data.get('password')
 
-    obj = User.objects.get(userid=userid)
+    obj = User.objects.get(userid=userid)   # 아이디 일치하는 튜플 가져옴
 
-    if password == obj.password:
-        return Response({'result':200}, status=status.HTTP_200_OK)
+    if password == obj.password:    # 비밀번호 비교
+        return Response({'result':200}, status=status.HTTP_200_OK)  # 로그인 성공
     else:
-        return Response({'result':400}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'result':400}, status=status.HTTP_400_BAD_REQUEST) # 로그인 실패
 
 
-# 마이페이지 API
-
-from rest_framework import status
-from .models import User
-
+###### 마이페이지 API
 @api_view(['POST'])
 def get_mypage(request):
     # 현재 로그인한 사용자의 아이디 가져오기
@@ -351,30 +261,3 @@ def get_mypage(request):
             "error": "사용자 정보를 찾을 수 없습니다."
         }
         return Response(response_data, status=status.HTTP_404_NOT_FOUND)
-
-
-
-import threading
-import time
-
-class SlotUpdateThread(threading.Thread):
-    def run(self):
-        while True:
-            # 실시간 주차 슬롯 업데이트 API 호출
-            #ParkingSlotUpdateAPIView.as_view()
-            #perform_object_detection()
-            
-            #slot_detection_result = perform_object_detection()
-
-            slot_db_update()
-
-         # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
-
-        
-            time.sleep(5)  # 3초마다 API 호출
-            #return Response(status=200)
-
-
-# 스레드 시작
-slot_update_thread = SlotUpdateThread()
-slot_update_thread.start()

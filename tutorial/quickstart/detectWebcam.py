@@ -38,6 +38,8 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
 
     print('width :%d, height : %d' % (cap.get(3), cap.get(4)))
 
+    #global slot_detect_result
+
 
     while (True):
         ret, frame = cap.read()  # Read 결과와 frame
@@ -122,14 +124,19 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
         # 인식한 바운딩 박스 딕셔너리 반환하도록 구현
         return slot_detect_result
 
-
+        
         if (ret):
             cv2.imshow('frame_color', frame)  # 컬러 화면 출력
             if cv2.waitKey(1) == ord('q'):
                 break
+        
+    
+        #return slot_detect_result
     
     cap.release()
     cv2.destroyAllWindows()
+    return slot_detect_result
+
 
 
 '''
