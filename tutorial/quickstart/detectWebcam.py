@@ -34,7 +34,7 @@ def makePath(occupied_path, empty_path):
 def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
     print("\n===========================================\n")
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0)   # 노트북 카메라는 0, 외부 카메라는 1
 
     print('width :%d, height : %d' % (cap.get(3), cap.get(4)))
 
@@ -116,10 +116,11 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
             
             print(slot_detect_result)
             ######
-            #return slot_detect_result
 
+        #cap.release()
+        #cv2.destroyAllWindows()
         # 인식한 바운딩 박스 딕셔너리 반환하도록 구현
-        return slot_detect_result
+        #return slot_detect_result
 
 
         if (ret):

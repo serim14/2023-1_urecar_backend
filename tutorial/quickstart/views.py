@@ -38,7 +38,7 @@ class ParkingLotList(APIView):
 def get_marker(self):
     parking_lots = ParkingLot.objects.all()
     data = [{"plotid": lot.plotid,"plotname": lot.plotname, "location": lot.location,
-              "latitude": lot.latitude, "longitude": lot.longitude, "fee": lot.fee, "total_space": lot.total_space, "available_space": lot.available_space} for lot in parking_lots]
+              "latitude": lot.latitude, "longitude": lot.longitude, "fee": lot.fee, "totalspace": lot.totalspace, "available_space": lot.available_space} for lot in parking_lots]
     return Response(data, status=status.HTTP_200_OK)
 
 
@@ -90,8 +90,6 @@ class ParkingSlotUpdateAPIView(APIView):
          # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
 
         for slotid in slot_detection_result.keys():
-
-
             # plotid를 안드에서 받아온다면,,,
             # slotid = f"{plotid}_A{slotid+1}"
             real_slotid = f"1_A{slotid+1}"
