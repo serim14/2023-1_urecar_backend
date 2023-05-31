@@ -129,7 +129,7 @@ class ParkingLot(models.Model):
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     fee = models.IntegerField(blank=True, null=True)
-    totalspace = models.IntegerField(blank=True, null=True)
+    total_space = models.IntegerField(blank=True, null=True)
     available_space = models.IntegerField(blank=True, null=True)
 
     class Meta:

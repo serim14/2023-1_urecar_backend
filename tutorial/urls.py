@@ -33,7 +33,7 @@ urlpatterns = [
     path('update_reservation/', views.update_reservation, name='update_reservation'),
     path('mypage/',views.get_mypage),
 
-    path('parking-slot/slot-update/', views.ParkingSlotUpdateAPIView.as_view(), name='parking-slot-update'),
+    #path('parking-slot/slot-update/', views.ParkingSlotUpdateAPIView.as_view(), name='parking-slot-update'),
 
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ]

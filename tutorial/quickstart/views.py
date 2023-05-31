@@ -31,19 +31,23 @@ class ParkingLotList(APIView):
         response_data = {
             'plotname': parking_lot.plotname,
             'location': parking_lot.location,
-            'total_space': parking_lot.totalspace,
+            'total_space': parking_lot.total_space,
         }
         return Response(response_data)
 """
 
 # 마커정보, 주차장 정보 등 반환
+
+
+
 @api_view(['GET'])
 def get_marker(self):
-    parking_lots = ParkingLot.objects.all()
-    data = [{"plotid": lot.plotid,"plotname": lot.plotname, "location": lot.location,
-              "latitude": lot.latitude, "longitude": lot.longitude, "fee": lot.fee, "totalspace": lot.totalspace, "available_space": lot.available_space} for lot in parking_lots]
-    return Response(data, status=status.HTTP_200_OK)
-
+    Parking_Lot = ParkingLot.objects.all()
+    data = [{"plotid": lot.plotid, "latitude": lot.latitude, "longitude": lot.longitude,
+            "plotname": lot.plotname , "location": lot.location, "fee": lot.fee,
+            "total_space": lot.total_space, "available_space": lot.available_space} 
+            for lot in Parking_Lot]
+    return Response(data, status=status.HTTP_200_OK)  
 
 ###### 예약 API 구현
     
@@ -78,7 +82,7 @@ def perform_object_detection():
     
 
 
-
+"""
 # APIView를 상속받아서 실시간 주차장 슬롯 상태를 업데이트하는 API 구현
 class ParkingSlotUpdateAPIView(APIView):
     def post(self, request):
@@ -112,21 +116,61 @@ class ParkingSlotUpdateAPIView(APIView):
         # ParkingLot 테이블 업데이트
         parking_lots = ParkingLot.objects.all()
         for parking_lot in parking_lots:
-            # 해당 주차장의 슬롯 개수를 세어서 totalspace 업데이트
+            # 해당 주차장의 슬롯 개수를 세어서 total_space 업데이트
             total_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid).count()
             available_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid, available='y').count()
-            parking_lot.totalspace = total_slots
+            parking_lot.total_space = total_slots
             parking_lot.available_space = available_slots
             parking_lot.save()
 
         return Response(status=200)
+"""
 
+def slot_db_update():
+    # 카메라에서 촬영한 이미지를 받음
+    #image = request.data.get('image')
+
+    # 객체 인식 수행
+    # 딕셔너리 형태
+    slot_detection_result = perform_object_detection()
+
+
+        # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
+
+    for slotid in slot_detection_result.keys():
+        # plotid를 안드에서 받아온다면,,,
+        # slotid = f"{plotid}_A{slotid+1}"
+        real_slotid = f"1_A{slotid+1}"
+
+        try:
+            parking_slot = ParkingSlot.objects.get(slotid=real_slotid)
+        except ParkingSlot.DoesNotExist:
+            return Response({'error': '슬랏이 존재하지 않습니다. Invalid slotid'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if slot_detection_result[slotid] == "occupied":
+            parking_slot.available = 'n'
+        elif slot_detection_result[slotid] == "empty":
+            parking_slot.available = 'y'
+        
+        parking_slot.save()
+
+    # ParkingLot 테이블 업데이트
+    parking_lots = ParkingLot.objects.all()
+    for parking_lot in parking_lots:
+        # 해당 주차장의 슬롯 개수를 세어서 total_space 업데이트
+        total_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid).count()
+        available_slots = ParkingSlot.objects.filter(plotid=parking_lot.plotid, available='y').count()
+        parking_lot.total_space = total_slots
+        parking_lot.available_space = available_slots
+        parking_lot.save()
+
+    return Response(status=200)
 
 
 
 # 1. 각각 주차장의 slot 정보 가져오기
 # (안드) plotid 를 줌
-
+"""
 class Get_parkingslot_info(generics.ListAPIView):
     serializer_class = ParkingSlotSerializer
 # (백엔드) parking_slot 테이블에서 plotid 일치하는 정보 조회해 돌려줌
@@ -140,7 +184,8 @@ class Get_parkingslot_info(generics.ListAPIView):
             return Response({'error': 'plotid is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         return self.list(request, *args, **kwargs)
-
+"""
+        
 ############ 주차장별 slot 정보 가져오기 (slotid, available)
 @api_view(['POST'])
 def get_slot_info(request):
@@ -307,7 +352,7 @@ def get_mypage(request):
         }
         return Response(response_data, status=status.HTTP_404_NOT_FOUND)
 
-"""
+
 
 import threading
 import time
@@ -316,11 +361,20 @@ class SlotUpdateThread(threading.Thread):
     def run(self):
         while True:
             # 실시간 주차 슬롯 업데이트 API 호출
-            ParkingSlotUpdateAPIView.as_view()
+            #ParkingSlotUpdateAPIView.as_view()
             #perform_object_detection()
-            time.sleep(6)  # 3초마다 API 호출
+            
+            #slot_detection_result = perform_object_detection()
+
+            slot_db_update()
+
+         # 받아온 딕셔너리를 가공하여 해당 slotid를 occupied empty에 따라 parking_slot 테이블의 available 속성 수정
+
+        
+            time.sleep(5)  # 3초마다 API 호출
+            #return Response(status=200)
+
 
 # 스레드 시작
 slot_update_thread = SlotUpdateThread()
 slot_update_thread.start()
-"""
