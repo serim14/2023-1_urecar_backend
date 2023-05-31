@@ -120,7 +120,7 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
         #cap.release()
         #cv2.destroyAllWindows()
         # 인식한 바운딩 박스 딕셔너리 반환하도록 구현
-        #return slot_detect_result
+        return slot_detect_result
 
 
         if (ret):

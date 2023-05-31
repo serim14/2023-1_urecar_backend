@@ -13,6 +13,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
+
+"""
 # 주차장의 (주차id, 위도, 경도) 반환 api
 class ParkingLotList(APIView):
     @api_view(['GET'])
@@ -32,8 +34,9 @@ class ParkingLotList(APIView):
             'total_space': parking_lot.totalspace,
         }
         return Response(response_data)
+"""
 
-
+# 마커정보, 주차장 정보 등 반환
 @api_view(['GET'])
 def get_marker(self):
     parking_lots = ParkingLot.objects.all()
@@ -137,6 +140,36 @@ class Get_parkingslot_info(generics.ListAPIView):
             return Response({'error': 'plotid is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         return self.list(request, *args, **kwargs)
+
+############ 주차장별 slot 정보 가져오기 (slotid, available)
+@api_view(['POST'])
+def get_slot_info(request):
+    plotid = request.data.get('plotid')
+    parking_slots = ParkingSlot.objects.filter(plotid=plotid)
+    data = [{"slotid": slot.slotid, "available": slot.available} for slot in parking_slots]
+    return Response(data, status=status.HTTP_200_OK)
+
+
+from django.core.exceptions import ObjectDoesNotExist
+
+"""
+@api_view(['POST'])
+def get_slot_info(request):
+    plotid = request.data.get('plotid')
+
+    try:
+        parking_slot = ParkingSlot.objects.get(plotid=plotid)
+    except ParkingSlot.DoesNotExist:
+        return Response({'error': 'Invalid plotid'}, status=status.HTTP_400_BAD_REQUEST)
+    except ParkingSlot.MultipleObjectsReturned:
+        return Response({'error': 'Multiple parking slots found for the given plotid'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 반환할 값
+    serializer = ParkingSlotSerializer(parking_slot)
+    return Response(serializer.data)
+
+"""
+    
 
 # 2. 예약 정보 받아서 예약 db 업데이트
 @api_view(['POST'])
@@ -273,3 +306,21 @@ def get_mypage(request):
             "error": "사용자 정보를 찾을 수 없습니다."
         }
         return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+
+"""
+
+import threading
+import time
+
+class SlotUpdateThread(threading.Thread):
+    def run(self):
+        while True:
+            # 실시간 주차 슬롯 업데이트 API 호출
+            ParkingSlotUpdateAPIView.as_view()
+            #perform_object_detection()
+            time.sleep(6)  # 3초마다 API 호출
+
+# 스레드 시작
+slot_update_thread = SlotUpdateThread()
+slot_update_thread.start()
+"""
