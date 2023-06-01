@@ -157,6 +157,7 @@ class Reservation(models.Model):
     intime = models.DateTimeField(blank=True, null=True)
     outtime = models.DateTimeField(blank=True, null=True)
     usagetime = models.IntegerField(blank=True, null=True)
+    finished = models.CharField(max_length=45, blank=True, null=True)
 
     class Meta:
         managed = False

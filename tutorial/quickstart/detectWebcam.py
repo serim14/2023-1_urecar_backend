@@ -34,11 +34,11 @@ def makePath(occupied_path, empty_path):
 def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
     print("\n===========================================\n")
 
-    cap = cv2.VideoCapture(0)   # 노트북 카메라는 0, 외부 카메라는 1
+    cap = cv2.VideoCapture(1)   # 노트북 카메라는 0, 외부 카메라는 1
 
     print('width :%d, height : %d' % (cap.get(3), cap.get(4)))
 
-    #global slot_detect_result
+    #slot_detect_result = {}
 
 
     while (True):
@@ -49,12 +49,13 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
         print(f"total prediction : {len(predictions)}")
 
         slot_detect_result = {}
-
+        
         # 이전에 predict해서 저장한 bounding box 이미지 파일 전부 삭제
         for f in os.listdir(occupied_path):
             os.remove(os.path.join(occupied_path, f))
         for f in os.listdir(empty_path):
             os.remove(os.path.join(empty_path, f))
+        
 
         # 바운딩 박스 정렬하고 어디에 있는 지 정리하는 코드(왼쪽부터 0, 1, 2.... 순으로 저장함)
         boundingBoxOrdered = []
@@ -98,11 +99,19 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
                     break
 
             if class_name == "occupied":
-                print(f"{index}====")
-                cv2.imwrite(f'{occupied_path}/{slotName}-{i}.jpg', frame_copy)
+                try:
+                    image_path = f'{occupied_path}/1_{slotName}{i+1}.jpg'
+                    cv2.imwrite(image_path, frame_copy)
+                    print(f"occupied 이미지 저장 완료: {image_path}")
+                except Exception as e:
+                    print(f"occupied 이미지 저장 중 오류 발생: {e}")
             elif class_name == "empty":
-                print(f"{index}====")
-                cv2.imwrite(f'{empty_path}/{slotName}-{i}.jpg', frame_copy)
+                try:
+                    image_path = f'{empty_path}/1_{slotName}{i+1}.jpg'
+                    cv2.imwrite(image_path, frame_copy)
+                    print(f"empty 이미지 저장 완료: {image_path}")
+                except Exception as e:
+                    print(f"empty 이미지 저장 중 오류 발생: {e}")
 
             # Bounding box 그리기
             if(class_name == "empty"):
@@ -122,20 +131,23 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
         #cap.release()
         #cv2.destroyAllWindows()
         # 인식한 바운딩 박스 딕셔너리 반환하도록 구현
-        return slot_detect_result
+        #return slot_detect_result
 
         
         if (ret):
             cv2.imshow('frame_color', frame)  # 컬러 화면 출력
             if cv2.waitKey(1) == ord('q'):
                 break
+        else:
+            break
         
     
-        #return slot_detect_result
+        return slot_detect_result
     
-    cap.release()
-    cv2.destroyAllWindows()
-    return slot_detect_result
+    cap.release()   # 웹캠 리소스 해제
+    cv2.destroyAllWindows() # 창을 닫는 코드
+
+    #return slot_detect_result
 
 
 

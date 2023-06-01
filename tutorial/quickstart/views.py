@@ -60,25 +60,93 @@ def perform_object_detection():
     occupied_path = "./images/occupied_boundingBox"
     empty_path = "./images/empty_boundingBox"
     api_key="Ndgqrpfsb4lW0aJHDg8q"  # 로보플로우 api key
-    project = "train-final-qr68m"   #로보플로우 프로젝트 이름
-    version = 3
+    project = "pl-sr"   #로보플로우 프로젝트 이름
+    version = 1
 
     model = init_roboflow(api_key, project, version)
     makePath(occupied_path, empty_path)
     # 슬랏 인덱스 별 occupied/empty 정보를 저장한 딕셔너리를 반환
-    slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="공영주차장")
+    slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="A")
     return slot_detection_result
 
+#import clova as cv
+from .clova import clova
+import os    
+
+# 번호판 비교 업데이트 하고, 번호판 일치하면 입차시간 업데이트
+def update_time_plate(real_slotid):
+    print("update_time_plate 진입")
+    occupied_path = "./images/occupied_boundingBox"
+    #empty_path = "./images/empty_boundingBox"
+    api_url = 'https://em19qzhk73.apigw.ntruss.com/custom/v1/22367/012ff1ea564eacc4379dd5444bfb9d6fb6e08954487dbb9945208defc49b9032/general'
+    secret_key = 'TnlCdUlFTmRRalltRGpWY3JCRlBsclVWUlJ1VkRJcng='
+    #clova_save_path = "images/"
+    #save_image_name = "OCRresult"
+
+    occupied_plate_dict = {}
+    print("update_time_plate: for문 앞")
+    for img_name in os.listdir(occupied_path): # occupied 됐으면 번호판 인식
+        print("update_time_plate: for문 진입: ", img_name[:4])
+        if real_slotid == img_name[:4]:
+            print("이미지 이름이 slotid랑 일치한다면")
+            #print(img_name)
+            f = occupied_path  + "/" + img_name
+            result = clova(api_url=api_url, secret_key=secret_key, path=f)
+            print(result)
+            #infer_text = result['images'][0]['fields'][0]['inferText'] + result['images'][0]['fields'][1]['inferText']
+            infer_text = ""
+
+            try:
+                if 'inferText' in result['images'][0]['fields'][0]:
+                    infer_text += result['images'][0]['fields'][0]['inferText']
+            except KeyError:
+                print("inferText 1 존재하지 않음")
+
+            try:
+                if result['images'] and 'inferText' in result['images'][0]['fields'][1]:
+                    infer_text += result['images'][0]['fields'][1]['inferText']
+            except (KeyError, IndexError):
+                print("inferText 2 존재하지 않음")
+
+            occupied_plate_dict[img_name[:4]] = infer_text
+            #cv.image_load(path=f, result=result, save_path=clova_save_path, save_image_name=save_image_name)
+
+            print(occupied_plate_dict)  # 예약된 특정 한 슬랏에 대한 번호판 텍스트 
     
+
+     
+    try:
+        reservation = Reservation.objects.get(slotid=real_slotid)
+    except Reservation.DoesNotExist:
+        return Response({'error': '해당하는 예약이 없습니다'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if reservation.carnum == occupied_plate_dict[real_slotid]:
+        reservation.intime = timezone.now()
+        reservation.finished = 'y'
+        reservation.save()
+    else:   # 번호판이 일치하지 않을 경우 경고,,,,
+        print("##########경고###########")
+
+    
+    
+    
+
+    serializer = ReservationSerializer(reservation)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+        
+
 ### slot별 주차현황 db에 업데이트하는 함수
 # perform_object_detection() 에서 반환한 slot_detection_result를 통해 parking_slot테이블의 availble 속성 업데이트
 # 업데이트 한 슬랏 현황을 바탕으로 parking_lot 테이블의 available_space 업데이트
-def slot_db_update():
+def slot_db_update(slot_detection_result):
+    print("slot_db_update 호출")
     # 객체 인식 수행, 딕셔너리 형태
-    slot_detection_result = perform_object_detection()
+    #slot_detection_result = perform_object_detection()
 
     # 받아온 딕셔너리를 가공하여 해당 slotid의 occupied/empty에 따라 parking_slot 테이블의 available 속성 수정
     for slotid in slot_detection_result.keys(): # 슬랏의 인덱스 가져옴( 0, 1, 2, ... 형태)
+        print("for문 진입 성공")
         # plotid를 안드에서 받아온다면...
         # slotid = f"{plotid}_A{slotid+1}"로 수정
         real_slotid = f"1_A{slotid+1}"  # 인덱스 0부터 시작하니 slotid 포맷 생성
@@ -88,10 +156,35 @@ def slot_db_update():
         except ParkingSlot.DoesNotExist:
             return Response({'error': '슬랏이 존재하지 않습니다. Invalid slotid'}, status=status.HTTP_400_BAD_REQUEST)
         
+        
         if slot_detection_result[slotid] == "occupied": # 딕셔너리에 인덱스 값을 키값으로 넣었을때 "occupied" 라면(slot_detection_result[0] 형태)
-            parking_slot.available = 'n'    # 슬랏에 차가 존재하니 예약할 수 없음
+            
+            # 만약 parking_slot.slotid가 예약된 거라면 입차시간 업데이트 후 번호판 비교
+            try:
+                print("예약된 슬랏인지 비교할게")
+                print(real_slotid)
+                reservation  = Reservation.objects.get(slotid=real_slotid)  # 슬랏id가 일치하는 슬랏 튜플 가져옴
+                if reservation.finished == 'n':
+                    print("예약된 슬랏이라면")
+                    # 예약된 slot이라면 입차시간 업데이트하고, 번호판 비교(api 따로 작성)
+                    update_time_plate(reservation.slotid)
+                
+                parking_slot.available = 'n'    # 슬랏에 차가 존재하니 예약할 수 없음
+            except:
+                print("예약된 슬랏 없어요")
+
+
+
         elif slot_detection_result[slotid] == "empty":  # 딕셔너리에 인덱스 값을 키값으로 넣었을때 "empty" 라면
-            parking_slot.available = 'y'    # 슬랏에 차가 없어 예약할 수 있음
+            ####### 여기 안에 reservation 테이블 안에 slotid와 finished 속성 비교해서 업데이트 하도록,,,,
+            #reserved_slot = Reservation.objects.filter(slotid=slotid, finished='n')
+            if Reservation.objects.filter(slotid=real_slotid, finished='n').exists():
+                pass  # 예약이 존재할 경우 아무 작업도 수행하지 않음
+            else:
+                parking_slot.available = 'y'
+            
+            
+            
         
         parking_slot.save() # 수정한 속성값 DB에 최종 저장
 
@@ -114,9 +207,21 @@ import time
 # 실시간으로 돌아야하기 때문에 스레드 분기
 class SlotUpdateThread(threading.Thread):
     def run(self):
+        occupied_path = "./images/occupied_boundingBox"
+        empty_path = "./images/empty_boundingBox"
+        api_key="Ndgqrpfsb4lW0aJHDg8q"  # 로보플로우 api key
+        project = "pl-sr"   #로보플로우 프로젝트 이름
+        version = 1
+
+        model = init_roboflow(api_key, project, version)
+        makePath(occupied_path, empty_path)
+        # 슬랏 인덱스 별 occupied/empty 정보를 저장한 딕셔너리를 반환
+        
+
         while True: # 실시간으로 돌리기
             # 실시간으로 객체인식하고 db업데이트하는 함수 호출
-            slot_db_update()    
+            slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="A")
+            slot_db_update(slot_detection_result)    
             time.sleep(8)  # 8초마다 API 호출
 
 # 스레드 시작
@@ -157,7 +262,8 @@ def update_reservation(request):
         carnum=carnum,
         usagetime=usagetime,
         intime=None,
-        outtime=None
+        outtime=None,
+        finished='n'
     )
     reservation.save()  # 예약 DB에 저장
 
@@ -182,7 +288,8 @@ def update_reservation(request):
         'parking_lot_name': parking_lot.plotname,
         'parking_lot_location': parking_lot.location,
         'slotid': slotid,
-        'usagetime': usagetime
+        'usagetime': usagetime,
+        'available': parking_slot.available
     }
     return Response(response_data, status=status.HTTP_200_OK)
 
@@ -193,6 +300,7 @@ def update_reservation(request):
 # 만약 일치한다면 reservation 테이블의 intime 속성에 입차한 시각(현재 시각)을 업데이트
 # 만약 불일치한다면 경고메세지 출력
 # 아직 구현중...
+# 입차가 되면 finished='y'로 수정
 
 from django.utils import timezone
 import datetime
@@ -202,6 +310,11 @@ from .serializers import ReservationSerializer
 def check_in(request):
     slotid = request.data.get('slotid')
     carnum = request.data.get('carnum')
+
+
+    #data = 클로바의 result 결과
+    #infer_text = data['images'][0]['fields'][0]['inferText'] + data['images'][0]['fields'][1]['inferText']
+
 
     try:
         reservation = Reservation.objects.get(slotid=slotid, carnum=carnum)
