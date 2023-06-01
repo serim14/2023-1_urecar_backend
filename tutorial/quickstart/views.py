@@ -87,6 +87,7 @@ def update_time_plate(real_slotid):
     print("update_time_plate: for문 앞")
     for img_name in os.listdir(occupied_path): # occupied 됐으면 번호판 인식
         print("update_time_plate: for문 진입: ", img_name[:4])
+
         if real_slotid == img_name[:4]:
             print("이미지 이름이 slotid랑 일치한다면")
             #print(img_name)
@@ -166,8 +167,9 @@ def slot_db_update(slot_detection_result):
                 reservation  = Reservation.objects.get(slotid=real_slotid)  # 슬랏id가 일치하는 슬랏 튜플 가져옴
                 if reservation.finished == 'n':
                     print("예약된 슬랏이라면")
+                    print("reservation.slotid: ", reservation.slotid)
                     # 예약된 slot이라면 입차시간 업데이트하고, 번호판 비교(api 따로 작성)
-                    update_time_plate(reservation.slotid)
+                    update_time_plate(real_slotid)
                 
                 parking_slot.available = 'n'    # 슬랏에 차가 존재하니 예약할 수 없음
             except:
