@@ -30,4 +30,7 @@ urlpatterns = [
     path('mypage/',views.get_mypage),
     #path('parking-slot/slot-update/', views.ParkingSlotUpdateAPIView.as_view(), name='parking-slot-update'),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
+    # 주차장 통계 api
+    path('get_parking_stats/', views.get_parking_stats, name='get_parking_stats'),
+    path('get_nearby_places/', views.get_nearby_places, name='get_nearby_places'),  # 인근장소추천
 ]

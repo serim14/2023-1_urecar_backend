@@ -131,6 +131,7 @@ class ParkingLot(models.Model):
     fee = models.IntegerField(blank=True, null=True)
     total_space = models.IntegerField(blank=True, null=True)
     available_space = models.IntegerField(blank=True, null=True)
+    image_path = models.CharField(max_length=200, blank=True, null=True)
 
     class Meta:
         managed = False
@@ -148,6 +149,33 @@ class ParkingSlot(models.Model):
         db_table = 'parking_slot'
 
 
+class ParkingStats(models.Model):
+    time = models.CharField(primary_key=True, max_length=45)
+    plotid = models.CharField(max_length=45)
+    numofslot = models.IntegerField(blank=True, null=True)
+    numofcar = models.IntegerField(blank=True, null=True)
+    stats = models.FloatField(blank=True, null=True)
+    count = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'parking_stats'
+        unique_together = (('time', 'plotid'),)
+
+
+class RecommendedPlace(models.Model):
+    place_name = models.CharField(primary_key=True, max_length=45)
+    nearby_parking_lot = models.IntegerField(blank=True, null=True)
+    place_address = models.CharField(max_length=45, blank=True, null=True)
+    place_latitude = models.FloatField(blank=True, null=True)
+    place_longitude = models.FloatField(blank=True, null=True)
+    place_property = models.CharField(max_length=45, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'recommended_place'
+
+
 class Reservation(models.Model):
     resnum = models.IntegerField(primary_key=True)
     plotid = models.IntegerField()
@@ -162,16 +190,6 @@ class Reservation(models.Model):
     class Meta:
         managed = False
         db_table = 'reservation'
-
-
-class TutorialPost(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    title = models.CharField(max_length=200)
-    text = models.TextField()
-
-    class Meta:
-        managed = False
-        db_table = 'tutorial_post'
 
 
 class User(models.Model):

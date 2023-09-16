@@ -34,7 +34,7 @@ def makePath(occupied_path, empty_path):
 def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
     print("\n===========================================\n")
 
-    cap = cv2.VideoCapture(1)   # 노트북 카메라는 0, 외부 카메라는 1
+    cap = cv2.VideoCapture(0)   # 노트북 카메라는 0, 외부 카메라는 1
 
     print('width :%d, height : %d' % (cap.get(3), cap.get(4)))
 
@@ -105,6 +105,7 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
                     print(f"occupied 이미지 저장 완료: {image_path}")
                 except Exception as e:
                     print(f"occupied 이미지 저장 중 오류 발생: {e}")
+                    pass
             elif class_name == "empty":
                 try:
                     image_path = f'{empty_path}/1_{slotName}{i+1}.jpg'
@@ -112,6 +113,7 @@ def webCamStart(model, occupied_path, empty_path, confidence, slotName) :
                     print(f"empty 이미지 저장 완료: {image_path}")
                 except Exception as e:
                     print(f"empty 이미지 저장 중 오류 발생: {e}")
+                    pass
 
             # Bounding box 그리기
             if(class_name == "empty"):

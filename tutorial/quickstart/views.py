@@ -1,5 +1,6 @@
 from django.shortcuts import render
-from .models import ParkingLot, ParkingSlot, User, Reservation
+from .models import ParkingLot, ParkingSlot, User, Reservation, RecommendedPlace
+#from serializers import RecommendedPlaceSerializer
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -10,27 +11,7 @@ from rest_framework import status
 # get_marker에 통합함
 # 1. 각각 주차장의 slot 정보 가져오기
 # (안드) plotid 를 줌
-"""
-# 주차장의 (주차id, 위도, 경도) 반환 api
-class ParkingLotList(APIView):
-    @api_view(['GET'])
-    def get_plot_list(self):
-        parking_lots = ParkingLot.objects.all()
-        data = [{"plotid": lot.plotid, "latitude": lot.latitude, "longitude": lot.longitude} for lot in parking_lots]
-        return Response(data, status=status.HTTP_200_OK)
 
-    @api_view(['POST'])
-    def get_plot_info(request):
-        data = JSONParser().parse(request)
-        parking_lot_id = data['plotid']
-        parking_lot = ParkingLot.objects.get(plotid=parking_lot_id)
-        response_data = {
-            'plotname': parking_lot.plotname,
-            'location': parking_lot.location,
-            'total_space': parking_lot.total_space,
-        }
-        return Response(response_data)
-"""
 ###### 안드로이드 앱 시작시 호출하는 api
 # 마커 정보 + 주차장 정보 등 필요한 모든 정보 반환
 @api_view(['GET'])
@@ -38,7 +19,7 @@ def get_marker(self):
     Parking_Lot = ParkingLot.objects.all()
     data = [{"plotid": lot.plotid, "latitude": lot.latitude, "longitude": lot.longitude,
             "plotname": lot.plotname , "location": lot.location, "fee": lot.fee,
-            "total_space": lot.total_space, "available_space": lot.available_space} 
+            "total_space": lot.total_space, "available_space": lot.available_space, "image_path": lot.image_path} 
             for lot in Parking_Lot]
     return Response(data, status=status.HTTP_200_OK)  
 
@@ -51,9 +32,13 @@ from .models import ParkingSlot, ParkingLot
 from .detectWebcam import init_roboflow, makePath, webCamStart
 #import clova as cv
 
+
+
+"""
 ### Roboflow 모델을 가져와서 객체 인식을 수행하는 함수
 # 이 함수의 결과는 {0: "empty"} 와 같은 객체 인식 결과 딕셔너리
 # detectWebcam.py에서 함수 호출해 사용
+
 def perform_object_detection():
     # 로직을 추가하여 객체 인식을 수행하는 코드 작성
     # 인식 결과를 반환 (occupied 또는 empty)
@@ -69,9 +54,36 @@ def perform_object_detection():
     slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="A")
     return slot_detection_result
 
+"""
+
+#### yolov5 적용한 객체 인식 코드
+###### 실시간 슬롯 현황 API
+"""
+from .yoloDetect import init_yolov5, makePath, webCamStart_yolov5
+# YOLOv5 모델을 가져와서 객체 인식을 수행하는 함수
+# 인식 결과를 반환 (occupied 또는 empty)
+def perform_object_detection():
+    # 객체 인식 결과(바운딩 박스를 그린 이미지)를 저장할 디렉토리 경로
+    occupied_path = "./images/occupied_boundingBox"
+    empty_path = "./images/empty_boundingBox"
+
+    weight_path = "C:/tutorial/tutorial/yolo/best_200_22.pt"
+    model = init_yolov5(weight_path)
+    makePath(occupied_path, empty_path)
+    slot_detection_result = webCamStart_yolov5(model, occupied_path, empty_path, confidence=40, slotName="공영주차장")
+
+    return slot_detection_result
+"""
+
+# 예제 사용:
+# result = perform_object_detection()
+# print(result)
+
+
 #import clova as cv
 from .clova import clova
 import os    
+from datetime import timedelta
 
 # 번호판 비교 업데이트 하고, 번호판 일치하면 입차시간 업데이트
 def update_time_plate(real_slotid):
@@ -122,15 +134,11 @@ def update_time_plate(real_slotid):
         return Response({'error': '해당하는 예약이 없습니다'}, status=status.HTTP_400_BAD_REQUEST)
 
     if reservation.carnum == occupied_plate_dict[real_slotid]:
-        reservation.intime = timezone.now()
+        reservation.intime = timezone.now() + timedelta(hours=9)
         reservation.finished = 'y'
         reservation.save()
     else:   # 번호판이 일치하지 않을 경우 경고,,,,
         print("##########경고###########")
-
-    
-    
-    
 
     serializer = ReservationSerializer(reservation)
     return Response(serializer.data, status=status.HTTP_200_OK)
@@ -151,6 +159,7 @@ def slot_db_update(slot_detection_result):
         # plotid를 안드에서 받아온다면...
         # slotid = f"{plotid}_A{slotid+1}"로 수정
         real_slotid = f"1_A{slotid+1}"  # 인덱스 0부터 시작하니 slotid 포맷 생성
+        print("슬랏 아이디:", slotid)
 
         try:
             parking_slot = ParkingSlot.objects.get(slotid=real_slotid)  # 슬랏id가 일치하는 슬랏 튜플 가져옴
@@ -174,6 +183,7 @@ def slot_db_update(slot_detection_result):
                 parking_slot.available = 'n'    # 슬랏에 차가 존재하니 예약할 수 없음
             except:
                 print("예약된 슬랏 없어요")
+                parking_slot.available = 'n'
 
 
 
@@ -181,12 +191,15 @@ def slot_db_update(slot_detection_result):
             ####### 여기 안에 reservation 테이블 안에 slotid와 finished 속성 비교해서 업데이트 하도록,,,,
             #reserved_slot = Reservation.objects.filter(slotid=slotid, finished='n')
             if Reservation.objects.filter(slotid=real_slotid, finished='n').exists():
-                pass  # 예약이 존재할 경우 아무 작업도 수행하지 않음
+                parking_slot.available = 'n'
+                #pass  # 예약이 존재할 경우 아무 작업도 수행하지 않음
             else:
                 parking_slot.available = 'y'
             
             
             
+        ################ 주차장 통계 api 호출하는 자리
+        update_stats()
         
         parking_slot.save() # 수정한 속성값 DB에 최종 저장
 
@@ -207,28 +220,58 @@ import time
 
 ###### 실시간 슬랏현황 업데이트 api
 # 실시간으로 돌아야하기 때문에 스레드 분기
+# 실시간으로 슬롯 현황 API를 호출하는 코드
+# 주기적으로 반복 실행되는 스레딩(Thread) (주기적으로 API를 호출)
+import threading
+import time
+#from yolov5_integration import init_yolov5, webCamStart_yolov5  # YOLOv5 관련 함수를 별도의 파일에 저장했다고 가정
+#from .yoloDetect import init_yolov5, makePath, webCamStart_yolov5
+from .stitch_yolo import image_capture, image_stitch, yolo_detect
+
 class SlotUpdateThread(threading.Thread):
     def run(self):
         occupied_path = "./images/occupied_boundingBox"
         empty_path = "./images/empty_boundingBox"
-        api_key="Ndgqrpfsb4lW0aJHDg8q"  # 로보플로우 api key
-        project = "pl-sr"   #로보플로우 프로젝트 이름
-        version = 1
-
-        model = init_roboflow(api_key, project, version)
-        makePath(occupied_path, empty_path)
-        # 슬랏 인덱스 별 occupied/empty 정보를 저장한 딕셔너리를 반환
         
+        # YOLOv5 모델 초기화
+        #weight_path = "C:/tutorial/tutorial/yolo/best_200_22.pt"
+        #model = init_yolov5(weight_path)
+        makePath(occupied_path, empty_path)
 
-        while True: # 실시간으로 돌리기
-            # 실시간으로 객체인식하고 db업데이트하는 함수 호출
-            slot_detection_result = webCamStart(model, occupied_path, empty_path, confidence= 40, slotName="A")
-            slot_db_update(slot_detection_result)    
-            time.sleep(8)  # 8초마다 API 호출
+        numOfImage = 10 # 캡쳐할 사진 개수 넣어주기
+
+        #img_names = ['image_0.jpg', 'image_1.jpg','image_2.jpg']
+        img_names = ['image_0.jpg', 'image_1.jpg','image_2.jpg', 'image_3.jpg', 'image_4.jpg', 'image_5.jpg', 'image_6.jpg', 'image_7.jpg', 'image_8.jpg', 'image_9.jpg']
+
+        #img_names = ['image_{}.jpg'.format(i) for i in range(numOfImage)] # 찍은 이미지 개수에 따라 조정
+        path = 'C:/tutorial/image_for_stitching/'
+        ### 졸업 전시회용 코드(우리가 요청할 때만 업데이트)
+        while True:
+            choice = input("slot update를 진행하시겠습니까? (y/n): ")
+            if choice == 'y':
+                image_capture(numOfImage)    # 이미지 캡쳐
+                image_stitch(img_name_seq=img_names, path=path)    # 이미지 스티칭
+                slot_detection_result = yolo_detect()   # 욜로 디텍션 + 딕셔너리 반환
+                slot_db_update(slot_detection_result)   # DB 업데이트
+
+            else:
+                pass
+        
+        """
+        ### 논문용 코드(실시간으로 업데이트)
+        while True:
+            # YOLOv5를 사용한 객체 탐지 및 슬롯 상태 업데이트
+            slot_detection_result = webCamStart_yolov5(model, occupied_path, empty_path, confidence=40, slotName="parkinglot")
+            slot_db_update(slot_detection_result) 
+            
+            time.sleep(6)  # 6초마다 API 호출
+
+        """
 
 # 스레드 시작
 slot_update_thread = SlotUpdateThread()
 slot_update_thread.start()
+
         
 ###### 주차장별 slot 정보 가져오는 api (slotid, available)
 @api_view(['POST'])
@@ -242,7 +285,8 @@ def get_slot_info(request):
 ###### 2. 예약 정보 받아서 예약 db 업데이트하는 api
 @api_view(['POST'])
 def update_reservation(request):
-    plotid = request.data.get('plotid')
+    plotid = int(request.data.get('plotid'))
+    #plotid = request.data.get('plotid')
     slotid = request.data.get('slotid')
     userid = request.data.get('userid')
     carnum = request.data.get('carnum')
@@ -291,10 +335,26 @@ def update_reservation(request):
         'parking_lot_location': parking_lot.location,
         'slotid': slotid,
         'usagetime': usagetime,
-        'available': parking_slot.available
+        'available': parking_slot.available,
     }
     return Response(response_data, status=status.HTTP_200_OK)
 
+from .serializers import RecommendedPlaceSerializer
+
+### 인근 추천 장소 API 분리
+@api_view(['POST'])
+def get_nearby_places(request):
+    # 요청으로부터 plotid를 가져옴
+    plotid = request.data.get('plotid')
+    if not plotid:
+        return Response({'error': 'plotid is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # plotid와 연계된 인근 장소 정보를 조회
+    associated_recommended_places = RecommendedPlace.objects.filter(nearby_parking_lot=plotid)
+    # 장소 정보를 직렬화 (serialize)
+    serializer = RecommendedPlaceSerializer(associated_recommended_places, many=True)
+    # 직렬화된 데이터를 응답으로 반환
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 ###### 예약 후 입차시 번호판 비교 api
 # 딥러닝 모델을 통해 reservation 테이블에 존재하는 slotid에 차량이 입차했다고 판단되면,
@@ -376,3 +436,64 @@ def get_mypage(request):
             "error": "사용자 정보를 찾을 수 없습니다."
         }
         return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+
+
+    
+
+from rest_framework import viewsets
+from rest_framework.response import Response
+from .models import ParkingStats
+from .serializers import ParkingStatsSerializer
+
+
+# 주차장 통계 업데이트
+def update_stats():
+    print("update_stats 진입")
+    parking_lot = ParkingLot.objects.get(plotid=1) # 주차장 다 가져오기
+
+    # 현재시간에서 '시'만 추출해서 parking_stats 테이블과 time 형식 일치
+    current_time = timezone.now()
+    print("current_time:", current_time)
+    current_hour = (current_time + timedelta(hours=9)).hour
+    real_hour = str(current_hour) + "시"
+    print(real_hour)
+
+
+
+    try:
+        # 주어진 시간에 해당하는 레코드를 가져옵니다.
+        parking_stats = ParkingStats.objects.get(time=real_hour)
+    except ParkingStats.DoesNotExist:
+        # 해당 시간에 레코드가 없으면 새로운 레코드를 생성합니다.
+        parking_stats = ParkingStats(time=real_hour)
+   
+    current_numofcar = parking_lot.total_space - parking_lot.available_space
+
+    # 주차 대수와 count를 업데이트합니다.
+    if parking_stats.numofcar is None:
+        parking_stats.numofcar = current_numofcar
+        parking_stats.count = 1
+    else:
+        parking_stats.numofcar += current_numofcar
+        parking_stats.count += 1
+    
+    # 통계 계산 (numofcar를 count로 나눈 값)
+    if parking_stats.count > 0:
+        parking_stats.stats = parking_stats.numofcar / parking_stats.count
+    else:
+        parking_stats.stats = 0.0
+    
+    # 레코드 저장
+    parking_stats.save()
+    
+
+
+# 실시간으로 기록하는 거랑 안드로이드에게 넘겨주는거 따로 구현
+@api_view(['POST'])
+def get_parking_stats(request):
+    plotid = request.data.get('plotid') # 안드에서 받은 plotid 저장
+    parking_stats = ParkingStats.objects.filter(plotid=plotid)   # parking_slot 테이블에서 해당 plotid와 일치하는 슬랏 정보 모두 가져옴 
+    data = [{"time": each_stat.time, "stats": each_stat.stats} for each_stat in parking_stats] # 가져온 튜플 중 slotid와 available 속성 뽑아서 저장
+    return Response(data, status=status.HTTP_200_OK)
+
+
